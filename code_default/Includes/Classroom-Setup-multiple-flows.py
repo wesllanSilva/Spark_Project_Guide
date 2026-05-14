@@ -8,7 +8,8 @@ my_catalog = build_user_catalog(catalog_forced = None) ## <-- Forces the usage o
 
 # COMMAND ----------
 
-check_required_vars("your_marketplace_share_catalog_name")
+# MAGIC %skip
+# MAGIC check_required_vars("your_marketplace_share_catalog_name")
 
 # COMMAND ----------
 
@@ -94,7 +95,7 @@ def multi_flow_demo_setup(
 
 my_vol_path = multi_flow_demo_setup(
     my_catalog = my_catalog, 
-    marketplace_catalog = your_marketplace_share_catalog_name, 
+    marketplace_catalog = 'dbacademy_retail_customer_wesllan', 
     schema = 'multi_flow',
     source_volumes = ['bright_home_orders','lumina_sports_orders','northstar_outfitters_orders'],
     reset_volume = True  ## <-- Set to True to delete all files in your volumes to start fresh if you've already complete the demo

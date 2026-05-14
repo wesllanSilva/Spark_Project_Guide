@@ -17,125 +17,16 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Overview
+# MAGIC ### Visão Geral da Demonstração de Pipeline Multi Flow
+# MAGIC Nesta demonstração, você construirá um Pipeline Declarativo Lakeflow Spark que executa o fluxo completo do medalhão, desde a ingestão bruta de múltiplas fontes de dados brutos até análises selecionadas
 # MAGIC
-# MAGIC This demonstration showcases how to build a robust incremental data pipeline using Lakeflow Spark Declarative Pipelines (SDP) to consolidate data from multiple subsidiaries (data sources) into a single target streaming table. 
-# MAGIC
-# MAGIC You'll work with three fictional company subsidiaries: Bright Home, Lumina Sports, and Northstar Outfitters, each producing transaction data in different formats (`CSV` and `JSON`). The demo illustrates how to overcome common pipeline challenges including multiple flows into a single table, schema mismatches, data quality issues, and performance optimization requirements.
-# MAGIC
-# MAGIC Through hands-on implementation, you'll create a complete medallion architecture pipeline that incrementally ingests multiple data sources into a single bronze table using flows, applies data quality constraints and transformations in the silver layer with liquid clustering optimization, and creates business intelligence materialized views in the gold layer. 
-# MAGIC
-# MAGIC ## Learning Objectives
-# MAGIC
-# MAGIC By the end of this demonstration, you will be able to:
-# MAGIC - **Ingest multiple data sources into one bronze table** using Spark Declarative Pipelines having different file formats like CSV and JSON.
-# MAGIC
-# MAGIC - **Standardize schemas in the bronze layer** and map correct data types in silver layer to resolve differences across source systems.
-# MAGIC
-# MAGIC - **Add data quality checks and enable liquid clustering** in the silver tables to enforce basic rules and improve query performance.
-# MAGIC
-# MAGIC - **Build incremental materialized views** in the gold layer that refresh automatically and provide ready-to-use analytics.
-# MAGIC
-# MAGIC - **Run and monitor the full pipeline run** across bronze, silver, and gold, including incremental loads and data lineage tracking.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Multi Flow Pipeline Demonstration Overview
-# MAGIC In this demonstration, you'll build a Lakeflow Spark Declarative Pipeline that performs the full medallion flow from raw ingestion of multiple raw data sources to curated analytics
-# MAGIC
-# MAGIC 1. **Use multiple flows (3)** to incrementally ingest files from three cloud storage locations and write into a single bronze table. 
-# MAGIC     - Each volume is a daily orders drop for a specific subsidiary that the company owns. We want all this data ingested into a single table for overall analysis.
-# MAGIC 2. **Define and build the silver table** with a clean schema, apply basic data quality constraints, and **enable liquid clustering** for query performance as the data continues to grow.
-# MAGIC 3. **Create gold materialized views** that automatically refresh and provide ready-to-use analytics.
+# MAGIC - Use múltiplos fluxos (3) para ingerir arquivos incrementalmente de três locais de armazenamento em nuvem e escrever em uma única tabela de bronze.
+# MAGIC - Cada volume é uma queda diária de pedidos para uma subsidiária específica que a empresa possui. 
+# MAGIC - Queremos que todos esses dados sejam incorporados em uma única tabela para análise geral.
+# MAGIC - Defina e construa a tabela prateada com um esquema limpo, aplique restrições básicas de qualidade de dados e permita o clustering líquido para desempenho de consulta à medida que os dados continuam crescendo.
+# MAGIC - Crie visualizações na camada ouro que atualizam automaticamente e fornecem análises prontas a usar.
 # MAGIC
 # MAGIC ![Multi Flow Pipeline Overview](./Includes/images/multi_flow/multi_flow_demo_pipeline_overview.png)
-
-# COMMAND ----------
-
-# MAGIC %md-sandbox
-# MAGIC ## REQUIRED - SELECT A COMPUTE ENVIRONMENT
-# MAGIC
-# MAGIC <div style="
-# MAGIC   border-left: 4px solid #f44336;
-# MAGIC   background: #ffebee;
-# MAGIC   padding: 14px 18px;
-# MAGIC   border-radius: 4px;
-# MAGIC   margin: 16px 0;
-# MAGIC ">
-# MAGIC   <strong style="display:block; color:#c62828; margin-bottom:6px; font-size: 1.1em;">Select Serverless Compute</strong>
-# MAGIC   <div style="color:#333;">
-# MAGIC
-# MAGIC Before starting this notebook, select the required compute environment listed below.
-# MAGIC
-# MAGIC - **Serverless Compute, Version 4**  
-# MAGIC   - [How to select an environment version](https://docs.databricks.com/aws/en/compute/serverless/dependencies#-select-an-environment-version)
-# MAGIC
-# MAGIC **NOTE:**  This notebook was **developed and tested using Serverless V4**. Other compute options may work but are not guaranteed to behave the same or support all features demonstrated.
-# MAGIC   </div>
-# MAGIC </div>
-# MAGIC
-
-# COMMAND ----------
-
-# MAGIC %md-sandbox
-# MAGIC <div style="
-# MAGIC   border-left: 4px solid #1976d2;
-# MAGIC   background: #e3f2fd;
-# MAGIC   padding: 14px 18px;
-# MAGIC   border-radius: 4px;
-# MAGIC   margin: 16px 0;
-# MAGIC ">
-# MAGIC   <strong style="display:block; color:#0d47a1; margin-bottom:6px; font-size:1.1em;">
-# MAGIC     Option 1 - Databricks Academy Provided Workspace (Vocareum Workspace)
-# MAGIC   </strong>
-# MAGIC   <details>
-# MAGIC   <div style="color:#333;">
-# MAGIC
-# MAGIC If you are running this notebook in a <strong>Databricks Academy provided Vocareum workspace</strong>, your Unity Catalog catalog is already created for you.
-# MAGIC
-# MAGIC Your catalog name matches your Vocareum username and looks like: <strong>labuser12345</strong> (series of unique numbers)
-# MAGIC   </div>
-# MAGIC   </details>
-# MAGIC </div>
-# MAGIC
-# MAGIC
-# MAGIC <div style="
-# MAGIC   border-left: 4px solid #1976d2;
-# MAGIC   background: #e3f2fd;
-# MAGIC   padding: 14px 18px;
-# MAGIC   border-radius: 4px;
-# MAGIC   margin: 16px 0;
-# MAGIC ">
-# MAGIC   <strong style="display:block; color:#0d47a1; margin-bottom:6px; font-size:1.1em;">
-# MAGIC     Option 2 - Other Workspaces or Databricks Free Edition
-# MAGIC   </strong>
-# MAGIC   <details>
-# MAGIC   <div style="color:#333;">
-# MAGIC
-# MAGIC If you are running this notebook in your own Databricks workspace or Databricks Free Edition, the setup will
-# MAGIC <strong>create a Unity Catalog catalog and schema for you</strong>. **Create catalog permission is required.**
-# MAGIC
-# MAGIC The catalog name is derived from your Databricks username and follows this pattern: <strong>labuser_username</strong>
-# MAGIC   </div>
-# MAGIC   </details>
-# MAGIC </div>
-# MAGIC
-# MAGIC <div style="
-# MAGIC   border-left: 4px solid #f44336;
-# MAGIC   background: #ffebee;
-# MAGIC   padding: 14px 18px;
-# MAGIC   border-radius: 4px;
-# MAGIC   margin: 16px 0;
-# MAGIC ">
-# MAGIC   <strong style="display:block; color:#c62828; margin-bottom:6px; font-size: 1.1em;">Do Not Run in Production Environments</strong>
-# MAGIC   <div style="color:#333;">
-# MAGIC   <ul>
-# MAGIC       <li>Only run this notebook in <strong>development or sandbox workspaces</strong>.</li>
-# MAGIC       <li>Do not run this in production environments. The setup script creates a catalog and schemas in your workspace.</li>
-# MAGIC   </ul>
-# MAGIC   </div>
-# MAGIC </div>
 
 # COMMAND ----------
 
@@ -146,23 +37,6 @@
 
 # MAGIC %md-sandbox
 # MAGIC ### A1. Access Marketplace Data
-# MAGIC <div style="
-# MAGIC   border-left: 4px solid #1976d2;
-# MAGIC   background: #e3f2fd;
-# MAGIC   padding: 14px 18px;
-# MAGIC   border-radius: 4px;
-# MAGIC   margin: 16px 0;
-# MAGIC ">
-# MAGIC
-# MAGIC   <strong style="display:block; color:#0d47a1; margin-bottom:6px; font-size: 1.1em;">
-# MAGIC     Option 1 - Databricks Academy Provided Workspace (Vocareum Workspace)
-# MAGIC   </strong>
-# MAGIC <details>
-# MAGIC   <div style="color:#333;">
-# MAGIC   If you are running this lab in a <strong>Databricks Academy provided Vocareum workspace</strong>, the share is already installed and available as <strong>dbacademy_retail</strong>. Please use this as the value for the <code>your_marketplace_share_catalog_name</code> variable below.
-# MAGIC   </div>
-# MAGIC </details>
-# MAGIC </div>
 # MAGIC
 # MAGIC
 # MAGIC <div style="
@@ -173,26 +47,26 @@
 # MAGIC   margin: 16px 0;
 # MAGIC ">
 # MAGIC   <strong style="display:block; color:#0d47a1; margin-bottom:6px; font-size: 1.1em;">
-# MAGIC     Option 2 - Other Workspaces or Databricks Free Edition
+# MAGIC   Opções - Outros Workspaces ou Databricks Free Edition
 # MAGIC   </strong>
 # MAGIC <details>
 # MAGIC   <div style="color:#333;">
 # MAGIC
-# MAGIC   If you are running this in your own Workspace, complete the following steps to get your own copy of the Marketplace data. If you already have this share simply add that name to the variable below.
+# MAGIC   Se você estiver executando isso em seu próprio Workspace, complete os seguintes passos para obter sua própria cópia dos dados do Marketplace. Se você já possui esse compartilhamento, simplesmente adicione esse nome à variável abaixo.
 # MAGIC
-# MAGIC 1. Open **Databricks Marketplace** in a new tab.  
+# MAGIC 1- Abra o Databricks Marketplace em uma nova aba.
 # MAGIC
-# MAGIC 2. Search for `Simulated Retail Customer Data`.  
+# MAGIC 2- Pesquise por Simulated Retail Customer Data.
 # MAGIC
-# MAGIC 3. Select the tile titled **Simulated Retail Customer Data (Databricks provided)**.  
+# MAGIC 3- Selecione o bloco intitulado Simulated Retail Customer Data (fornecido pela Databricks).
 # MAGIC
-# MAGIC 4. Click **Get instant access**.  
+# MAGIC 4- Clique em Obter acesso instantâneo.
 # MAGIC
-# MAGIC 5. **Enter a unique catalog name** for your share to avoid receiving a duplicate catalog error in shared Workspaces. For example: `dbacademy_retail_yourname`.  
+# MAGIC 5- Digite um nome de catálogo único para o seu compartilhamento para evitar receber um erro de catálogo duplicado em Workspaces compartilhados. Por exemplo: dbacademy_retail_seunome.
 # MAGIC
-# MAGIC 6. Review and accept the terms, then click **Get instant access** to complete the setup.
+# MAGIC 6- Revise e aceite os termos, depois clique em Obter acesso instantâneo para concluir a configuração.
 # MAGIC
-# MAGIC 7. Update the variable `your_marketplace_share_catalog_name` in cell below to point to your shared catalog from Marketplace.
+# MAGIC 7- Atualize a variável your_marketplace_share_catalog_name na célula abaixo para apontar para o seu catálogo compartilhado do Marketplace.
 # MAGIC   </div>
 # MAGIC </details>
 # MAGIC </div>
@@ -207,82 +81,51 @@ your_marketplace_share_catalog_name = 'dbacademy_retail'
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### A2. Configure Your Catalog and Schema
+# MAGIC ### A2 - Configure seu catálogo e esquema
+# MAGIC Execute a célula abaixo para inicializar seu ambiente.
 # MAGIC
-# MAGIC 1. Run the cell below to initialize your environment. 
+# MAGIC Esta etapa de configuração faz o seguinte:
 # MAGIC
-# MAGIC     This setup step does the following:
-# MAGIC
-# MAGIC     - **Assumes you have permission to create a catalog** when running outside of a Databricks provided Vocareum workspace
-# MAGIC     - Create three schemas in your specified catalog:  
-# MAGIC         - **multi_flow_1_bronze**
-# MAGIC         - **multi_flow_2_silver**
-# MAGIC         - **multi_flow_3_gold**  
-# MAGIC     - Creates a three volumes in your **YOUR_LABUSER_CATALOG.multi_flow_1_bronze** schema and adds a single JSON file in each volume.
-# MAGIC     - Checks your specified Serverless compute version
-# MAGIC
-# MAGIC This ensures that all schemas, tables and objects are created in your catalog.
-# MAGIC
-# MAGIC > **Important:** You must have permission to create catalogs in your own non Vocareum workspace. If you do not have the required permissions, this step will fail. Review the note below before continuing.
-
-# COMMAND ----------
-
-# MAGIC %md-sandbox
-# MAGIC
-# MAGIC <div style="
-# MAGIC   border-left: 4px solid #ff9800;
-# MAGIC   background: #fff3e0;
-# MAGIC   padding: 14px 18px;
-# MAGIC   border-radius: 4px;
-# MAGIC   margin: 16px 0;
-# MAGIC ">
-# MAGIC
-# MAGIC   <strong style="display:block; color:#e65100; margin-bottom:6px; font-size: 1.1em;">
-# MAGIC     Troubleshooting Setup - Missing Create Catalog Permissions
-# MAGIC   </strong>
-# MAGIC <details>
-# MAGIC   <div style="color:#333;">
-# MAGIC
-# MAGIC If you do not have permission to create a new catalog but already have one available, you can explicitly specify an existing catalog by using the `catalog_forced` argument in the `build_user_catalog_name` function.
-# MAGIC
-# MAGIC This function is defined in the notebook: `./Includes/Classroom-Setup-multiple-flows`
-# MAGIC
-# MAGIC   </div>
-# MAGIC </details>
-# MAGIC </div>
-# MAGIC
-# MAGIC
-# MAGIC
+# MAGIC - Crie três esquemas no seu catálogo especificado:
+# MAGIC     - multi_flow_1_bronze
+# MAGIC     - multi_flow_2_silver
+# MAGIC     - multi_flow_3_gold
+# MAGIC - Cria três volumes no seu esquema e adiciona um único arquivo JSON em cada volume:
+# MAGIC     - My_CATALOG.multi_flow_1_bronze 
 # MAGIC
 
 # COMMAND ----------
 
+# DBTITLE 1,SETUP
 # MAGIC %run ./Includes/Classroom-Setup-multiple-flows
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 2. Run the cell below to view the value of the `my_vol_path` variable.
+# MAGIC 2. Execute a célula abaixo para ver o valor da variável.`my_vol_path`
 # MAGIC
-# MAGIC    Confirm that the value references your **your-catalog.multi_flow_1_bronze** path. This will be used to dynamically reference your source volumes throughout this demonstration.
+# MAGIC Confirme que o valor faz referência ao seu caminho **catalog.multi_flow_1_bronze**. Isso será usado para referenciar dinamicamente os volumes de origem ao longo desta demonstração.
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
 
+# DBTITLE 1,my_vol_path
 print(my_vol_path)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## B. Explore the Source Volumes for Ingesting Multiple Flows into a Single Target
+# MAGIC ## B. Explorar os volumes fonte para ingerir múltiplos fluxos em um único alvo
 # MAGIC
-# MAGIC Before building multiple flows that write to a single target streaming table, start by exploring the raw source data stored in in the three volumes.  
+# MAGIC Antes de construir múltiplos fluxos que gravam em uma única tabela de streaming alvo, comece explorando os dados brutos armazenados nos três volumes.
 # MAGIC
-# MAGIC Each **volume** represents a **separate sales system** for a different subsidiary within our fictional company:
+# MAGIC Cada volume representa um sistema de vendas separado para uma subsidiária diferente dentro da nossa empresa fictícia:
 # MAGIC
-# MAGIC - **B1.** Bright Home Orders volume (`CSV` files)  
-# MAGIC - **B2.** Lumina Sports Orders volume (`CSV` files)  
-# MAGIC - **B3.** Northstar Outfitters Orders volume (`JSON` files)
+# MAGIC - **B1.** Volume de Ordens Bright Home (arquivos) CSV
+# MAGIC - **B2.** Volume de Ordens Esportivas Lumina (arquivos) CSV
+# MAGIC - **B3.** Volume de pedidos da Northstar Outfitters (arquivos)JSON
+# MAGIC
 
 # COMMAND ----------
 
@@ -292,9 +135,9 @@ print(my_vol_path)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 1. View the files in the **multi_flow_1_bronze.bright_home_orders** volume.
+# MAGIC 1. Veja os arquivos no volume **multi_flow_1_bronze.bright_home_orders**.
+# MAGIC    Note que atualmente existe apenas um arquivo `CSV` neste volume para as vendas de **01-11-2025.CSV**
 # MAGIC
-# MAGIC    Notice that only one `CSV` file currently exists in this volume for the sales on **2025-11-01**.
 # MAGIC
 
 # COMMAND ----------
@@ -304,21 +147,26 @@ spark.sql(f"LIST '{my_vol_path}/bright_home_orders'").display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 2. Explore the raw data for **bright_home_orders**. The cell below performs the following:
+# MAGIC 2. Explore os dados brutos para bright_home_orders. 
 # MAGIC
-# MAGIC    a. Counts the number of records in the file within the volume.  
-# MAGIC    b. Describes the default ingestion data types for each column of the `CSV` file.  
-# MAGIC    c. Previews the data.  
+# MAGIC    a. Conta o número de registros no arquivo dentro do volume.
 # MAGIC
-# MAGIC In the output, notice the following:
-# MAGIC - **157** rows are present in this file.  
-# MAGIC - The schema is inferred and returns a variety of data types.  
-# MAGIC - This is simple sales order data from the company's **Bright Home** subsidiary.
+# MAGIC    b. Descreve os tipos padrão de dados de ingestão para cada coluna do arquivo.
+# MAGIC
+# MAGIC    c. Prévia os dados.CSV
+# MAGIC
+# MAGIC Na saída, note o seguinte:
+# MAGIC
+# MAGIC **157** linhas estão presentes neste arquivo.
+# MAGIC O esquema é inferido e retorna uma variedade de tipos de dados.
+# MAGIC São dados simples de pedidos de venda da subsidiária Bright Home da empresa.
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
 
-# a. Row count
+# DBTITLE 1,Explore_bright_home_orders
+# a. quantidade de linhas
 df_count = spark.sql(f"""
     SELECT count(*) AS TotalRows
     FROM read_files('{my_vol_path}/bright_home_orders')
@@ -332,7 +180,7 @@ df_schema = spark.sql(f"""
 """)
 display(df_schema)
 
-# c. Preview rows
+# c. Previa dos dados
 df_preview = spark.sql(f"""
     SELECT *
     FROM read_files('{my_vol_path}/bright_home_orders')
@@ -347,32 +195,30 @@ display(df_preview)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC 1. View the files in the **multi_flow_1_bronze.lumina_sports_orders** volume.
-# MAGIC
-# MAGIC    Notice that only one `CSV` file currently exists in this volume for the sales on **2025-11-01**.
-
-# COMMAND ----------
-
 spark.sql(f"LIST '{my_vol_path}/lumina_sports_orders'").display()
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 2. Explore the raw data for **Lumina Sports**. The cell below performs the following:
+# MAGIC 2. Explore os dados brutos para lumina_sports_orders. 
 # MAGIC
-# MAGIC    a. Counts the number of records in the file within the volume.  
-# MAGIC    b. Describes the default ingestion data types for each column of the `CSV` file.  
-# MAGIC    c. Previews the data.  
+# MAGIC    a. Conta o número de registros no arquivo dentro do volume.
 # MAGIC
-# MAGIC In the output, notice the following:
-# MAGIC - **110** rows are present in this file.  
-# MAGIC - The schema is inferred and returns a variety of data types.  
-# MAGIC - This is simple sales order data from the company's **Lumina Sports** subsidiary.
+# MAGIC    b. Descreve os tipos padrão de dados de ingestão para cada coluna do arquivo.
+# MAGIC
+# MAGIC    c. Prévia os dados `CSV`
+# MAGIC
+# MAGIC Na saída, note o seguinte:
+# MAGIC
+# MAGIC **110** linhas estão presentes neste arquivo.
+# MAGIC O esquema é inferido e retorna uma variedade de tipos de dados.
+# MAGIC São dados simples de pedidos de venda da subsidiária **Lumina Sports** da empresa.
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
 
+# DBTITLE 1,Explore_lumina_sports_orders
 # a. Row count
 df_count = spark.sql(f"""
     SELECT count(*) AS TotalRows
@@ -402,32 +248,30 @@ display(df_preview)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC 1. View the files in the **multi_flow_1_bronze.northstar_outfitters_orders** volume.
-# MAGIC
-# MAGIC    Notice that only one `JSON` file currently exists in this volume for the sales on **2025-11-01**.
-
-# COMMAND ----------
-
 spark.sql(f"LIST '{my_vol_path}/northstar_outfitters_orders'").display()
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 2. Explore the raw data for **Northstar Outfitters**. The cell below performs the following:
+# MAGIC 2. Explore os dados brutos para northstar_outfitters_orders. 
 # MAGIC
-# MAGIC    a. Counts the number of records in the file within the volume.  
-# MAGIC    b. Describes the default ingestion data types for each column of the `JSON` file.  
-# MAGIC    c. Previews the data.  
+# MAGIC    a. Conta o número de registros no arquivo dentro do volume.
 # MAGIC
-# MAGIC In the output, notice the following:
-# MAGIC - **182** rows are present in this file.  
-# MAGIC - The schema is inferred and returns a variety of data types.  
-# MAGIC - This is simple sales order data from the company's **Northstar Outfitters** subsidiary.
+# MAGIC    b. Descreve os tipos padrão de dados de ingestão para cada coluna do arquivo.
+# MAGIC
+# MAGIC    c. Prévia os dados `JSON`
+# MAGIC
+# MAGIC Na saída, note o seguinte:
+# MAGIC
+# MAGIC - **182** linhas estão presentes neste arquivo.
+# MAGIC - O esquema é inferido e retorna uma variedade de tipos de dados.
+# MAGIC - São dados simples de pedidos de venda da subsidiária **Northstar Outfitters** da empresa.
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
 
+# DBTITLE 1,Explore_northstar_outfitters_orders
 # a. Row count
 df_count = spark.sql(f"""
     SELECT count(*) AS TotalRows
@@ -453,12 +297,13 @@ display(df_preview)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### B4. Raw Data Exploration Summary
+# MAGIC ### B4. Resumo da Exploração de Dados Brutos
+# MAGIC Abaixo está uma rápida visão geral do que descobrimos após examinar os volumes de origem bruta.
 # MAGIC
-# MAGIC Below is a quick overview of what we discovered after examining the raw source volumes. 
 # MAGIC
-# MAGIC #### Raw Cloud Storage Overview
-# MAGIC Each source volume contains one file with a small number of sales for our demonstration.
+# MAGIC #### Visão geral do Armazenamento Bruto em Nuvem
+# MAGIC Cada volume de origem contém um arquivo com um pequeno número de vendas para nossa demonstração.
+# MAGIC
 # MAGIC
 # MAGIC | Source Data (volume)            | File Format | # of Rows | # of Files | Sales Date |
 # MAGIC |---------------------------------|-------------|-----------|------------|------------|
@@ -469,11 +314,12 @@ display(df_preview)
 # MAGIC
 # MAGIC <br>
 # MAGIC
-# MAGIC #### Schema Differences Comparison and Issues
+# MAGIC #### Diferenças de Esquema, Comparação e Questões
 # MAGIC
-# MAGIC - Each raw data source uses its own structure (`CSV` or `JSON`).  
-# MAGIC - When ingesting `CSV`, the inferred column types often differ from `JSON`.  
-# MAGIC - Since each format infers schemas independently, combining these three flows into a single target table will introduce **schema mismatches that lead to ingestion conflicts**.
+# MAGIC - Cada fonte de dados brutos usa sua própria estrutura (`CSV` ou `JSON`). 
+# MAGIC - Ao ingerir `CSV`, os tipos de colunas inferidos frequentemente diferem de `JSON`
+# MAGIC - Como cada formato infere esquemas de forma independente, combinar esses três fluxos em uma única tabela alvo introduzirá desajustes de esquema que levam a conflitos de ingestão.(**schema mismatches that lead to ingestion conflicts**).
+# MAGIC
 # MAGIC
 # MAGIC | **Column Name**     | **bright_home_orders (CSV)** | **lumina_sports_orders (CSV)** | **northstar_outfitters_orders (JSON)** |
 # MAGIC |---------------------|------------------------|---------------------------|---------------------------------|
@@ -497,13 +343,13 @@ display(df_preview)
 # MAGIC
 # MAGIC <br>
 # MAGIC
-# MAGIC #### Goal: Ingest All Raw Source Files Into One Bronze Streaming Table
+# MAGIC #### Objetivo: Ingerir todos os arquivos-fonte brutos em uma única tabela de streaming bronze
 # MAGIC
-# MAGIC To successfully combine all three sources into a single bronze streaming table, we will need to standardize the schema. 
+# MAGIC Para combinar com sucesso as três fontes em uma única tabela de streaming de bronze, precisaremos padronizar o esquema.
 # MAGIC
-# MAGIC To do this, we will **ingest every column as a `STRING`** into the bronze table.
+# MAGIC Para isso, vamos **ingerir cada coluna como uma STRING** na tabela bronze.
 # MAGIC
-# MAGIC This avoids data type conflicts between `CSV` and `JSON` files, since each format infers types differently. Normalizing everything to `STRING` keeps the bronze layer predictable, prevents ingestion failures, and lets us apply the correct data types later in the silver layer.
+# MAGIC Isso evita conflitos de tipos de dados entre arquivos `CSV` e `JSON`, já que cada formato infere tipos de forma diferente. Normalizar tudo como `STRING` para manter a camada bronze previsível, evitar falhas de ingestão e nos permitir aplicar os tipos de dados corretos mais tarde na camada de prata.
 
 # COMMAND ----------
 
@@ -513,42 +359,25 @@ display(df_preview)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### C1. Enable the Lakeflow Pipelines Editor
+# MAGIC ### C2. Criando um Pipeline Declarativo Lakeflow Spark usando o Editor de Pipelines Lakeflow
 # MAGIC
-# MAGIC Complete the following steps to confirm or enable the **Lakeflow Pipelines Editor**:
+# MAGIC Spark Declarative Pipeline:
 # MAGIC
-# MAGIC 1. In the top-right corner of the workspace, select your **account icon** ![Account Icon](./Includes/images/account_icon.png) (*Your icon letter will differ*).  
+# MAGIC 1. No painel principal de navegação, clique com o botão direito em **Jobs & Pipelines** e selecione Abrir link na Nova Aba..  
 # MAGIC
-# MAGIC 2. Right-click **Settings** and choose **Open link in new tab**.  
+# MAGIC 2. Na nova aba, selecione **Create → ETL Pipeline**. 
 # MAGIC
-# MAGIC 3. In the left sidebar, select **Developer** under **User**.  
-# MAGIC
-# MAGIC 4. In the **Experimental features** section, locate **Lakeflow Pipelines Editor** and toggle it **on**.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### C2. Create a Lakeflow Spark Declarative Pipeline using the Lakeflow Pipelines Editor
-# MAGIC Complete the following steps to create your Spark Declarative Pipeline:
-# MAGIC
-# MAGIC 1. In the main navigation pane, right-click **Jobs & Pipelines** and select **Open link in New Tab**.  
-# MAGIC
-# MAGIC 2. In the new tab, select **Create → ETL Pipeline**.  
-# MAGIC
-# MAGIC    **NOTE:** If prompted to **Try the new Lakeflow Pipelines Editor**, choose **Enable Lakeflow Pipelines Editor**. This appears only if you did not complete the previous step.  
-# MAGIC
-# MAGIC 3. At the top, complete the following:
-# MAGIC    - Name your pipeline `demo_multi_flow_yourname`
-# MAGIC    - Select your default **catalog** and **schema**:  
-# MAGIC         - **Catalog:** The catalog you specified for this notebook  
+# MAGIC 3. No topo, complete o seguinte:
+# MAGIC    - Dê nome ao seu pipeline`demo_multi_flow_yourname`
+# MAGIC    - Selecione o **catalog** e **schema** :  
+# MAGIC         - **Catalog:**  O catálogo que você especificou para este notebook  
 # MAGIC         - **Schema:** **multi_flow_1_bronze**  
-# MAGIC       **NOTE:** Clear the selected schema using the cross icon to view all schemas.
 # MAGIC
-# MAGIC 4. Rename the **transformations** folder to `ingest_multiple_flows`.
+# MAGIC 4. Renomeie o arquivo **transformations** para `ingest_multiple_flows`.
 # MAGIC
-# MAGIC 5. Rename the **my_transformations.sql** file to `flow_ingestion.sql`.
+# MAGIC 5. Renomeie o arquivo **my_transformations.sql** para `flow_ingestion.sql`.
 # MAGIC
-# MAGIC 6. Leave the **Lakeflow Pipelines Editor** page open.
+# MAGIC /Workspace/Users/wesllan2000@yahoo.com.br/Tecnicas-Avancadas-Lakeflow-SDP/code_default/Includes/images/multi_flow/pipeline_creation.png
 # MAGIC
 # MAGIC #### Checkpoint
 # MAGIC ![Create SDP Checkpoint](./Includes/images/multi_flow/pipeline_creation.png)
@@ -556,13 +385,12 @@ display(df_preview)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## D. Using Multiple Flows to Write to a Single Target
+# MAGIC ## D. Usar múltiplos fluxos para escrever em um único alvo
+# MAGIC Em muitos ambientes empresariais, os dados chegam de vários sistemas que precisam ser consolidados em uma única tabela para processamento a jusante.
 # MAGIC
-# MAGIC In many enterprise environments, data arrives from several systems that must be consolidated into a single table for downstream processing.
+# MAGIC Neste exemplo, a empresa possui três subsidiárias, cada uma produzindo dados de transações em formatos de arquivo bruto ligeiramente diferentes.
 # MAGIC
-# MAGIC In this example, the company has **three subsidiaries, each producing transaction data in slightly different raw file formats**. 
-# MAGIC
-# MAGIC With Spark Declarative Pipelines, you can define multiple flows that write to the same target streaming table, allowing all raw files in cloud storage to be **incrementally ingested into one unified destination**.
+# MAGIC Com o **Spark Declarative Pipelines**, você pode definir múltiplos fluxos que escrevem na mesma tabela de streaming de destino, permitindo que todos os arquivos brutos no armazenamento em nuvem sejam ingeridos incrementalmente em um único destino unificado.
 
 # COMMAND ----------
 
@@ -572,12 +400,14 @@ display(df_preview)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 1. Start by creating the **bronze streaming table** that will serve as the landing zone for all incoming transaction data. 
+# MAGIC 1. Criar uma tabela de streaming bronze que servirá como Landing zone para todos os dados de transações recebidas.
 # MAGIC
-# MAGIC     This table ingests every column as `STRING` to ensure compatibility across the different source systems.
-# MAGIC
-# MAGIC
-# MAGIC     Copy the SQL code below and paste it into your `flow_ingestion.sql` file.
+# MAGIC Essa tabela ingere todas as colunas com STRING para garantir compatibilidade entre os diferentes sistemas fonte.
+
+# COMMAND ----------
+
+# DBTITLE 1,Create_Structure_bronze_table
+
 
 # COMMAND ----------
 
@@ -658,24 +488,23 @@ display(df_preview)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC **Review the code**
-# MAGIC - The `COMMENT` clause adds descriptive metadata to the table for documentation purposes.
+# MAGIC **Revisão do Código**
 # MAGIC
-# MAGIC - The `TBLPROPERTIES` statement configures the following setting:
-# MAGIC   - **Reset Protection**: The `'pipelines.reset.allowed' = false` property prevents full refreshes on the streaming table, which helps avoid accidentally removing checkpoints and truncating the streaming table data.
+# MAGIC - A instrunção `TBLPROPERTIES` configura a seguinte:
+# MAGIC   - **Proteção contra Reset**: A propriedade `'pipelines.reset.allowed' = false` impede atualizações completas na tabela de streaming, o que ajuda a evitar remover checkpoints acidentalmente e truncar os dados da tabela de streaming.
 # MAGIC
-# MAGIC #### IMPORTANT: Understanding Full Table Refresh Protection
+# MAGIC #### IMPORTANTE: Entendendo Full Table Refresh Protection
 # MAGIC
-# MAGIC This protection is particularly important when your raw data source automatically removes files after a certain timeframe. Without this setting, data that is no longer present in the source directory would not be reingested into the target table during a **Run pipeline with full table refresh** operation.
+# MAGIC Essa proteção é especialmente importante quando sua fonte de dados brutos remove automaticamente arquivos após um determinado período de tempo. Sem essa configuração, dados que não estão mais presentes no diretório de origem não seriam reinvertidos na tabela de destino durante uma operação **Run pipeline with full table refresh** 
 # MAGIC
-# MAGIC **NOTE:** For guidance on when to use full refreshes, see the [Should I use a full refresh?](https://docs.databricks.com/aws/en/ldp/updates#should-i-use-a-full-refresh) documentation.
+# MAGIC **NOTE:** Para orientações sobre quando usar atualizações completas, veja a documentação [Should I use a full refresh?](https://docs.databricks.com/aws/en/ldp/updates#should-i-use-a-full-refresh)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### D2. Configure the Pipeline Parameters
+# MAGIC ### D2. Configurando os Parâmetros do Pipeline
 # MAGIC
-# MAGIC 1. Run the cell below to retrieve the key value pairs needed to set your pipeline configuration parameters for each **raw data source volume**.
+# MAGIC 1. Recuperar os pares-chave-valor necessários para definir os parâmetros de configuração do pipeline para cada volume bruto da fonte de dados.
 
 # COMMAND ----------
 
@@ -691,21 +520,11 @@ for key, value in config_parameters:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 2. Copy the paths above and add each one by one as a configuration parameter in your **Spark Declarative Pipeline**.
+# MAGIC 2. Copie os caminhos acima e adicione cada um como um parâmetro de configuração no seu **Pipeline Declarativo do Spark.**.
 # MAGIC
-# MAGIC    This will allow your pipeline to reference each volume through parameters.
+# MAGIC Isso permitirá que seu pipeline faça referência a cada volume por meio de parâmetros.
 # MAGIC
-# MAGIC    a. Select **Settings** in your pipeline tab.  
-# MAGIC
-# MAGIC    b. Under **Configuration**, select **Add configuration**. 
-# MAGIC
-# MAGIC    c. For each **Key**, enter the key name shown above.  
-# MAGIC
-# MAGIC    d. For each **Value**, enter the corresponding volume path.  
-# MAGIC
-# MAGIC    e. Select **Save**.
-# MAGIC
-# MAGIC    **NOTE:** For more details on configuration parameters, see the Databricks documentation: [Use parameters with Lakeflow Declarative Pipelines](https://docs.databricks.com/aws/en/ldp/parameters)
+# MAGIC    **NOTE:** Para mais detalhes sobre parâmetros de configuração, veja a documentação Databricks [Use parameters with Lakeflow Declarative Pipelines](https://docs.databricks.com/aws/en/ldp/parameters)
 # MAGIC
 # MAGIC
 # MAGIC #### Checkpoint (your path will vary)
@@ -715,9 +534,14 @@ for key, value in config_parameters:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### D3. Configure Flow from the Store Bright Home Orders Volume
+# MAGIC ### D3. Configurando Flow para a loja **Bright Home**
 # MAGIC
-# MAGIC 1. Copy the code below and paste into your `flow_ingestion.sql` file.
+# MAGIC 1. Arquivo `flow_ingestion.sql`.
+
+# COMMAND ----------
+
+# DBTITLE 1,BRONZE FLOW - BRIGHT HOME
+
 
 # COMMAND ----------
 
@@ -814,6 +638,11 @@ for key, value in config_parameters:
 # MAGIC ### D4. Configure Flow from Store Lumina Sports Orders Volume
 # MAGIC
 # MAGIC 1. Copy the code below and paste into your `flow_ingestion.sql` file.
+
+# COMMAND ----------
+
+# DBTITLE 1,BRONZE FLOW - LUMINA SPORTS
+
 
 # COMMAND ----------
 

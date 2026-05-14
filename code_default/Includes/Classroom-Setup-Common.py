@@ -1,4 +1,12 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "2"
+# ///
+spark.sql("SELECT current_user()").first()[0]
+
+# COMMAND ----------
+
 ## Determines if in Vocareum or Other Workspace and sets up the catalog
 ## Usage: my_catalog = build_user_catalog() within your demo/lab setup.
 
@@ -125,6 +133,10 @@ def build_user_catalog(prefix: str = "labuser", catalog_forced = None) -> str:
                     "You may not have privileges to create catalogs in this workspace.\n"
                     f"Error: {e}"
                 )
+
+# COMMAND ----------
+
+display(_get_workspace_catalogs())
 
 # COMMAND ----------
 
